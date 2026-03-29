@@ -1,0 +1,1569 @@
+local secure_getrenv = getrenv
+local checkClosure = isexecutorclosure or checkcaller or function() return false end
+
+local Services = {
+    Players = game:GetService("Players"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    Workspace = game:GetService("Workspace"),
+    RunService = game:GetService("RunService"),
+    TeleportService = game:GetService("TeleportService"),
+    HttpService = game:GetService("HttpService"),
+    VirtualUser = game:GetService("VirtualUser"),
+    UserInputService = game:GetService("UserInputService"),
+    CoreGui = game:GetService("CoreGui"),
+    Lighting = game:GetService("Lighting")
+}
+
+local GiftPrices = {
+    ["DoublePanen"] = 4000,
+    ["FastGrow"] = 5000,
+    ["ExtraSlots"] = 7000,
+    ["DoubleSell"] = 7000,
+    ["DoubleXP"] = 10000,
+    ["RainLover"] = 10000,
+    ["AutoHarvest"] = 17000,
+    ["Boombox"] = 15000,
+    ["VIP"] = 30000,
+    ["AutoFeedChicken"] = 15000,
+    ["AutoFeedCow"] = 15000,
+    ["AutoCollectEgg"] = 10000,
+    ["AutoCollectMilk"] = 10000
+}
+
+local Framework = {
+    Running = true, Connections = {}, StreamerConns = {}, DynamicConns = {}, ActiveTasks = {},
+    State = { 
+        WasWalkSpeed = false, WasFlying = false, FlyInstances = {Att = nil, Vel = nil, Gyro = nil}
+    },
+    Config = {
+        Player = {WalkSpeed = false, WSValue = 50, Fly = false, FlySpeed = 50, Noclip = false, StreamerMode = false, FakeName = "LuvHubXUser"},
+        Security = {AntiAdmin = false, AntiAFK = false, AutoRejectCarry = false},
+        Theme = "Default Blue",
+        Farming = {
+            IsPlanting = false, 
+            SelectedBuySeed = "Bibit Padi", BuyAmount = 10,
+            SelectedPlantSayur = "Bibit Padi", TargetAreaSayur = "AreaTanam", PlantAmountSayur = 15, SelectedPatternSayur = "Grid Normal",
+            SelectedPlantPohon = "Bibit Sawit", TargetAreaPohon = "AreaTanamBesar1", PlantAmountPohon = 1,
+            SelectedSellSayur = "Padi", SellAmountSayur = 10,
+            SelectedSellBuah = "Sawit", SellAmountBuah = 10,
+            SelectedSellTernak = "Egg", SellAmountTernak = 10,
+            AutoHarvest = false, CropESP = false, AutoFarmAFK = false, AutoBuyAFK = true, AutoBuyAmount = 30,
+            AutoAnimal = false, AutoStore = false
+        },
+        Misc = {AutoShower = false, AutoSleep = false, TargetTroll = "", GiftTarget = "", GiftItem = "", GiftType = "Normal", CustomPrice = 0, CustomNote = ""}
+    }, Cache = {}
+}
+
+Framework.AddConnection = function(self, conn, isStreamer)
+    if typeof(conn) == "RBXScriptConnection" then table.insert(isStreamer and self.StreamerConns or self.Connections, conn) end
+end
+
+Framework.CancelTask = function(self, taskName)
+    if self.ActiveTasks[taskName] then task.cancel(self.ActiveTasks[taskName]); self.ActiveTasks[taskName] = nil end
+end
+
+local ListBibitSayur = {"Bibit Padi", "Bibit Jagung", "Bibit Tomat", "Bibit Terong", "Bibit Strawberry"}
+local ListBibitPohon = {"Bibit Sawit", "Bibit Durian"}
+local ListAllBibit = {"Bibit Padi", "Bibit Jagung", "Bibit Tomat", "Bibit Terong", "Bibit Strawberry", "Bibit Sawit", "Bibit Durian"}
+
+local ListJualSayur = {"Padi", "Jagung", "Tomat", "Terong", "Strawberry"}
+local ListJualBuah = {"Sawit", "Durian"}
+local ListJualTernak = {"Egg", "Milk"}
+
+local ListGamepass = {"DoublePanen", "FastGrow", "ExtraSlots", "DoubleSell", "DoubleXP", "RainLover", "AutoHarvest", "Boombox", "VIP", "AutoFeedChicken", "AutoFeedCow", "AutoCollectEgg", "AutoCollectMilk"}
+
+local ListAreaSayur = {"AreaTanam", "AreaTanam2", "AreaTanam3", "AreaTanam4", "AreaTanam5", "AreaTanam6", "AreaTanam7"}
+local ListAreaPohon = {}
+for i = 1, 32 do table.insert(ListAreaPohon, "AreaTanamBesar" .. i) end
+local ListPolaTanam = {"Grid Normal", "Grid Rapat", "Grid Lebar", "Baris Panjang"}
+
+local Modules = {}
+
+Modules.Visual = {
+    PotatoMode = function()
+        pcall(function()
+            for _, v in ipairs(Services.Workspace:GetDescendants()) do
+                if v:IsA("BasePart") and not v:IsA("MeshPart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                    v.Reflectance = 0
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    v.Transparency = 1
+                end
+            end
+        end)
+    end,
+
+    DisableLighting = function()
+        pcall(function()
+            local Lighting = Services.Lighting
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            Lighting.ShadowSoftness = 0
+            for _, v in ipairs(Lighting:GetDescendants()) do
+                if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") then
+                    v.Enabled = false
+                end
+            end
+        end)
+    end,
+
+    LowWater = function()
+        pcall(function()
+            Services.Workspace.Terrain.WaterWaveSize = 0
+            Services.Workspace.Terrain.WaterWaveSpeed = 0
+            Services.Workspace.Terrain.WaterReflectance = 0
+            Services.Workspace.Terrain.WaterTransparency = 0
+        end)
+    end,
+
+    ClearParticles = function()
+        pcall(function()
+            for _, v in ipairs(Services.Workspace:GetDescendants()) do
+                if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                    v.Enabled = false
+                end
+            end
+        end)
+    end,
+
+    ClearMemory = function(Win)
+        pcall(function()
+            local before = gcinfo()
+            collectgarbage("collect")
+            local after = gcinfo()
+            if Win and Win.Notify then 
+                Win:Notify({ Title = "Memory Cleaned", Text = string.format("Membebaskan %d KB memori.", before - after), Duration = 3 }) 
+            end
+        end)
+    end,
+
+    ToggleScreenSaver = function(mode, state)
+        if not Framework.Cache.ScreenSaver then
+            local sg = Instance.new("ScreenGui", Services.CoreGui)
+            sg.Name = "LuvHubSaver"
+            sg.DisplayOrder = 999
+            local fr = Instance.new("Frame", sg)
+            fr.Size = UDim2.new(10, 0, 10, 0)
+            fr.Position = UDim2.new(-5, 0, -5, 0)
+            Framework.Cache.ScreenSaver = fr
+        end
+        if state then
+            Framework.Cache.ScreenSaver.BackgroundColor3 = mode == "White" and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(0, 0, 0)
+            Framework.Cache.ScreenSaver.Visible = true
+        else
+            Framework.Cache.ScreenSaver.Visible = false
+        end
+    end
+}
+
+Modules.Player = {
+    ApplyCensorLogic = function(obj)
+        if not Framework.Config.Player.StreamerMode then return end
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            local LP = Framework.Cache.LocalPlayer
+            if not LP then return end
+            local function doCensor()
+                if obj.Text and (string.find(obj.Text, LP.Name) or string.find(obj.Text, LP.DisplayName)) then
+                    obj.Text = string.gsub(obj.Text, LP.Name, Framework.Config.Player.FakeName)
+                    obj.Text = string.gsub(obj.Text, LP.DisplayName, Framework.Config.Player.FakeName)
+                end
+            end
+            doCensor()
+            Framework:AddConnection(obj:GetPropertyChangedSignal("Text"):Connect(function() if Framework.Config.Player.StreamerMode then doCensor() end end), true)
+        end
+    end,
+
+    UpdateMovementLogic = function()
+        if not Framework.Running or not Framework.Cache.Character or not Framework.Cache.Humanoid then return end
+        local rootPart = Framework.Cache.HumanoidRootPart
+        
+        if Framework.Config.Player.Noclip then Framework.Cache.Humanoid:ChangeState(11) end
+        
+        if Framework.Config.Player.WalkSpeed then 
+            if not Framework.Config.Player.Fly then Framework.Cache.Humanoid.WalkSpeed = Framework.Config.Player.WSValue; Framework.State.WasWalkSpeed = true end
+        elseif Framework.State.WasWalkSpeed then 
+            Framework.Cache.Humanoid.WalkSpeed = 16; Framework.State.WasWalkSpeed = false 
+        end
+        
+        if Framework.Config.Player.Fly and rootPart then
+            Framework.State.WasFlying = true; Framework.Cache.Humanoid.PlatformStand = true
+            if not Framework.State.FlyInstances.Att then
+                Framework.State.FlyInstances.Att = Instance.new("Attachment", rootPart)
+                Framework.State.FlyInstances.Vel = Instance.new("LinearVelocity", rootPart); Framework.State.FlyInstances.Vel.Attachment0 = Framework.State.FlyInstances.Att; Framework.State.FlyInstances.Vel.MaxForce = math.huge; Framework.State.FlyInstances.Vel.RelativeTo = Enum.ActuatorRelativeTo.World
+                Framework.State.FlyInstances.Gyro = Instance.new("AlignOrientation", rootPart); Framework.State.FlyInstances.Gyro.Mode = Enum.OrientationAlignmentMode.OneAttachment; Framework.State.FlyInstances.Gyro.Attachment0 = Framework.State.FlyInstances.Att; Framework.State.FlyInstances.Gyro.MaxTorque = math.huge; Framework.State.FlyInstances.Gyro.Responsiveness = 200
+            end
+            local moveVector = (Framework.Cache.PlayerControls and pcall(function() return Framework.Cache.PlayerControls:GetMoveVector() end) and Framework.Cache.PlayerControls:GetMoveVector()) or Vector3.zero
+            local cam = Services.Workspace.CurrentCamera
+            local flyDir = (cam.CFrame.LookVector * -moveVector.Z) + (cam.CFrame.RightVector * moveVector.X); local yDir = 0
+            if Services.UserInputService:IsKeyDown(Enum.KeyCode.Space) or Framework.Cache.Humanoid.Jump then yDir = yDir + 1 end
+            if Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then yDir = yDir - 1 end
+            flyDir = flyDir + Vector3.new(0, yDir, 0)
+            if flyDir.Magnitude > 0 then flyDir = flyDir.Unit end
+            Framework.State.FlyInstances.Vel.VectorVelocity = flyDir * Framework.Config.Player.FlySpeed
+            Framework.State.FlyInstances.Gyro.CFrame = CFrame.lookAt(Vector3.zero, cam.CFrame.LookVector)
+        else
+            if Framework.State.WasFlying then 
+                Framework.Cache.Humanoid.PlatformStand = false; Framework.State.WasFlying = false
+                if rootPart then rootPart.AssemblyLinearVelocity = Vector3.zero end
+                for k,v in pairs(Framework.State.FlyInstances) do if v then v:Destroy() end end; Framework.State.FlyInstances = {Att=nil,Vel=nil,Gyro=nil}
+            end
+        end
+    end,
+
+    CheckMovementConnection = function()
+        local isActive = Framework.Config.Player.WalkSpeed or Framework.Config.Player.Fly or Framework.Config.Player.Noclip
+        if isActive then
+            if not Framework.DynamicConns.Movement then Framework.DynamicConns.Movement = Services.RunService.Stepped:Connect(Modules.Player.UpdateMovementLogic) end
+        else
+            if Framework.DynamicConns.Movement then Framework.DynamicConns.Movement:Disconnect(); Framework.DynamicConns.Movement = nil end
+            if Framework.State.WasWalkSpeed and Framework.Cache.Humanoid then Framework.Cache.Humanoid.WalkSpeed = 16; Framework.State.WasWalkSpeed = false end
+            if Framework.State.WasFlying and Framework.Cache.Humanoid then 
+                Framework.Cache.Humanoid.PlatformStand = false; Framework.State.WasFlying = false
+                for k,v in pairs(Framework.State.FlyInstances) do if v then v:Destroy() end end; Framework.State.FlyInstances = {Att=nil,Vel=nil,Gyro=nil}
+            end
+        end
+    end
+}
+
+Modules.Security = {
+    CheckAdmin = function(p, Win)
+        local isStaff = false
+        pcall(function() 
+            if game.CreatorType == Enum.CreatorType.Group then
+                if p:GetRankInGroup(game.CreatorId) > 0 then isStaff = true end
+            elseif game.CreatorType == Enum.CreatorType.User then
+                if p.UserId == game.CreatorId then isStaff = true end
+            end
+        end)
+        local realName = string.lower(p.Name)
+        local dispName = string.lower(p.DisplayName)
+        local redFlags = {"admin", "mod", "owner", "dev", "creator", "staff"}
+        
+        for _, word in ipairs(redFlags) do
+            if string.find(realName, word) or string.find(dispName, word) then
+                isStaff = true
+                break
+            end
+        end
+
+        if isStaff then
+            if Win then Win:Notify({Title="BAHAYA ADMIN", Text="Staff terdeteksi! Pindah server...", Duration=7}) end
+            task.delay(7, function()
+                pcall(function()
+                    local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
+                    local svrs = Services.HttpService:JSONDecode(game:HttpGet(url))
+                    for _, server in ipairs(svrs.data) do
+                        if server.playing < server.maxPlayers and server.id ~= game.JobId then 
+                            Services.TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, Framework.Cache.LocalPlayer)
+                            return 
+                        end
+                    end
+                end)
+                task.wait(2)
+                Framework.Cache.LocalPlayer:Kick("[LuvHub X] Admin Terdeteksi! Menyelamatkan akun karena gagal teleport...")
+            end)
+        end
+    end,
+
+    ToggleAntiAdmin = function(state, Win)
+        Framework.Config.Security.AntiAdmin = state
+        if state then
+            if not Framework.DynamicConns.AntiAdmin then
+                for _, p in pairs(Services.Players:GetPlayers()) do if p ~= Framework.Cache.LocalPlayer then Modules.Security.CheckAdmin(p, Win) end end
+                Framework.DynamicConns.AntiAdmin = Services.Players.PlayerAdded:Connect(function(p) Modules.Security.CheckAdmin(p, Win) end)
+            end
+        else
+            if Framework.DynamicConns.AntiAdmin then Framework.DynamicConns.AntiAdmin:Disconnect(); Framework.DynamicConns.AntiAdmin = nil end
+        end
+    end,
+
+    ToggleAntiAFK = function(state, Win)
+        Framework.Config.Security.AntiAFK = state
+        if state then
+            if not Framework.DynamicConns.AntiAFK then
+                pcall(function()
+                    for _, conn in pairs(getconnections(Framework.Cache.LocalPlayer.Idled)) do
+                        if type(conn.Disable) == "function" then conn:Disable() end
+                    end
+                end)
+                Framework.DynamicConns.AntiAFK = Framework.Cache.LocalPlayer.Idled:Connect(function()
+                    Services.VirtualUser:CaptureController()
+                    if Services.UserInputService.TouchEnabled and not Services.UserInputService.KeyboardEnabled then
+                        Services.VirtualUser:ClickButton2(Vector2.new(0, 0))
+                    else
+                        Services.VirtualUser:Button2Down(Vector2.new(0, 0), Services.Workspace.CurrentCamera.CFrame)
+                        task.wait(0.1)
+                        Services.VirtualUser:Button2Up(Vector2.new(0, 0), Services.Workspace.CurrentCamera.CFrame)
+                    end
+                    local cam = Services.Workspace.CurrentCamera
+                    if cam then
+                        local originalCFrame = cam.CFrame
+                        cam.CFrame = originalCFrame * CFrame.Angles(0, math.rad(0.5), 0)
+                        task.wait(0.1)
+                        cam.CFrame = originalCFrame
+                    end
+                end)
+            end
+        else
+            if Framework.DynamicConns.AntiAFK then 
+                Framework.DynamicConns.AntiAFK:Disconnect(); Framework.DynamicConns.AntiAFK = nil 
+            end
+            pcall(function()
+                for _, conn in pairs(getconnections(Framework.Cache.LocalPlayer.Idled)) do
+                    if type(conn.Enable) == "function" then conn:Enable() end
+                end
+            end)
+        end
+    end,
+
+    ToggleAutoRejectCarry = function(state)
+        Framework.Config.Security.AutoRejectCarry = state
+        if state then
+            if not Framework.DynamicConns.AutoReject then
+                local PG = Framework.Cache.LocalPlayer:WaitForChild("PlayerGui")
+                Framework.DynamicConns.AutoReject = PG.ChildAdded:Connect(function(child)
+                    if child.Name == "CarryAcceptGui" and Framework.Config.Security.AutoRejectCarry then
+                        local remote = Services.ReplicatedStorage:FindFirstChild("RespondToCarry", true)
+                        if remote then remote:FireServer(false) end
+                        child:Destroy()
+                    end
+                end)
+            end
+        else
+            if Framework.DynamicConns.AutoReject then Framework.DynamicConns.AutoReject:Disconnect(); Framework.DynamicConns.AutoReject = nil end
+        end
+    end
+}
+
+Modules.Troll = {
+    SpamCarry = function(targetName, Win)
+        local target = Services.Players:FindFirstChild(targetName)
+        if target then
+            local remote = Services.ReplicatedStorage:FindFirstChild("RequestCarry", true)
+            if remote then
+                remote:FireServer(target, "Piggyback")
+                if Win then Win:Notify({Title="Troll", Text="Berhasil mengirim request gendong ke "..target.Name, Duration=2}) end
+            end
+        else
+            if Win then Win:Notify({Title="Gagal", Text="Player tidak ditemukan!", Duration=2}) end
+        end
+    end,
+
+    SummonRain = function(Win)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("SummonRain")
+        if remote then
+            remote:FireServer()
+            if Win then Win:Notify({Title="Exploit", Text="Memaksa cuaca menjadi hujan...", Duration=3}) end
+        end
+    end,
+
+    SendGift = function(targetName, passName, Win)
+        local target = Services.Players:FindFirstChild(targetName)
+        local giftType = Framework.Config.Misc.GiftType
+        local fPrice = giftType == "Custom" and Framework.Config.Misc.CustomPrice or (GiftPrices[passName] or 0)
+        local fNote = giftType == "Custom" and Framework.Config.Misc.CustomNote or "-"
+
+        if not target then 
+            if Win then Win:Notify({Title="Gagal", Text="Player target tidak ditemukan!", Duration=2}) end
+            Modules.Database.LogGift(targetName, passName, "Gagal (Player Not Found)", giftType, fPrice, fNote)
+            return 
+        end
+
+        local remoteGift = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("RequestGift")
+        local remoteDone = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("GiftPurchaseDone")
+        
+        if remoteGift and remoteDone then
+            local passConfigs = {
+                ["DoublePanen"] = 3534985546,
+                ["FastGrow"] = 3542169435,
+                ["ExtraSlots"] = 3542169045,
+                ["DoubleSell"] = 3542168668,
+                ["DoubleXP"] = 3542168280,
+                ["RainLover"] = 3542167872,
+                ["AutoHarvest"] = 3542161637,
+                ["Boombox"] = 3542161296,
+                ["VIP"] = 3542160882,
+                ["AutoFeedChicken"] = 3556635500,
+                ["AutoFeedCow"] = 3556635493,
+                ["AutoCollectEgg"] = 3556635498,
+                ["AutoCollectMilk"] = 3556635499
+            }
+            local prodId = passConfigs[passName]
+            if prodId then
+                remoteGift:InvokeServer("PROMPT_GIFT", target.UserId, passName)
+                task.wait(0.5)
+                remoteDone:FireServer(prodId, true)
+                if Win then Win:Notify({Title="Gift Berhasil", Text="Mengirim "..passName.." ke "..target.Name, Duration=3}) end
+                Modules.Database.LogGift(target.Name, passName, "Berhasil", giftType, fPrice, fNote)
+            else
+                if Win then Win:Notify({Title="Gagal", Text="Product ID tidak ditemukan untuk "..passName, Duration=2}) end
+                Modules.Database.LogGift(target.Name, passName, "Gagal (Invalid ID)", giftType, fPrice, fNote)
+            end
+        else
+            Modules.Database.LogGift(target.Name, passName, "Gagal (Remote Not Found)", giftType, fPrice, fNote)
+        end
+    end
+}
+
+local function FormatRp(amount)
+    local formatted = tostring(tonumber(amount) or 0)
+    local k
+    while true do
+        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1.%2')
+        if k == 0 then break end
+    end
+    return "Rp " .. formatted
+end
+
+Modules.Database = {
+    FirebaseURL = "https://livhub-d7b25-default-rtdb.asia-southeast1.firebasedatabase.app/GiftHistory.json",
+
+    LogGift = function(targetName, passName, status, gType, gPrice, gNote)
+        task.spawn(function()
+            local data = {
+                Sender = Framework.Cache.LocalPlayer.Name,
+                Target = targetName,
+                Gamepass = passName,
+                Time = os.date("%d-%m-%Y %H:%M:%S"),
+                Status = status,
+                Type = gType,
+                Price = gPrice,
+                Note = gNote
+            }
+            local jsonData = Services.HttpService:JSONEncode(data)
+            pcall(function()
+                local req = (request or http_request or (syn and syn.request))
+                if req then
+                    req({Url = Modules.Database.FirebaseURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData})
+                else
+                    game:HttpPost(Modules.Database.FirebaseURL, jsonData, "application/json")
+                end
+            end)
+        end)
+    end,
+
+    ClearDatabase = function()
+        pcall(function()
+            local req = (request or http_request or (syn and syn.request))
+            if req then
+                req({Url = Modules.Database.FirebaseURL, Method = "DELETE"})
+            end
+        end)
+    end,
+
+    ShowHistoryUI = function()
+        local themeColors = {
+            ["Default Blue"] = Color3.fromRGB(45, 110, 255),
+            ["Sunset Orange"] = Color3.fromRGB(255, 100, 40),
+            ["Matrix Green"] = Color3.fromRGB(40, 220, 40),
+            ["Blood Red"] = Color3.fromRGB(220, 40, 40)
+        }
+        local activeColor = themeColors[Framework.Config.Theme] or Color3.fromRGB(45, 110, 255)
+
+        local oldUI = Services.CoreGui:FindFirstChild("LuvHubHistoryUI")
+        if oldUI then oldUI:Destroy() end
+
+        local sg = Instance.new("ScreenGui", Services.CoreGui)
+        sg.Name = "LuvHubHistoryUI"
+        sg.DisplayOrder = 1000
+        sg.IgnoreGuiInset = true
+
+        local main = Instance.new("Frame", sg)
+        main.AnchorPoint = Vector2.new(0.5, 0.5)
+        main.Size = UDim2.new(0.6, 0, 0.65, 0)
+        main.Position = UDim2.new(0.5, 0, 0.5, 0)
+        main.BackgroundColor3 = Color3.fromRGB(15, 15, 17)
+        main.BackgroundTransparency = 0.05
+        main.BorderSizePixel = 0
+        main.Active = true
+        main.Draggable = true 
+
+        local sizeConstraint = Instance.new("UISizeConstraint", main)
+        sizeConstraint.MaxSize = Vector2.new(550, 400)
+        sizeConstraint.MinSize = Vector2.new(350, 250)
+
+        local corner = Instance.new("UICorner", main)
+        corner.CornerRadius = UDim.new(0, 10)
+        
+        local mainStroke = Instance.new("UIStroke", main)
+        mainStroke.Color = Color3.fromRGB(45, 45, 5)
+        mainStroke.Thickness = 1.2
+
+        local topAccent = Instance.new("Frame", main)
+        topAccent.Size = UDim2.new(1, 0, 0, 3)
+        topAccent.BackgroundColor3 = activeColor
+        topAccent.BorderSizePixel = 0
+        local accentCorner = Instance.new("UICorner", topAccent)
+        accentCorner.CornerRadius = UDim.new(0, 10)
+        
+        local fixAccent = Instance.new("Frame", topAccent)
+        fixAccent.Size = UDim2.new(1, 0, 0, 3)
+        fixAccent.Position = UDim2.new(0, 0, 0.5, 0)
+        fixAccent.BackgroundColor3 = activeColor
+        fixAccent.BorderSizePixel = 0
+
+        local topbar = Instance.new("Frame", main)
+        topbar.Size = UDim2.new(1, 0, 0, 40)
+        topbar.Position = UDim2.new(0, 0, 0, 3)
+        topbar.BackgroundTransparency = 1
+
+        local title = Instance.new("TextLabel", topbar)
+        title.Size = UDim2.new(1, -50, 1, 0)
+        title.Position = UDim2.new(0, 15, 0, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "LuvHub X - Global Database"
+        title.TextColor3 = Color3.fromRGB(240, 240, 240)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 16
+        title.TextXAlignment = Enum.TextXAlignment.Left
+
+        local closeBtn = Instance.new("TextButton", topbar)
+        closeBtn.Size = UDim2.new(0, 30, 0, 30)
+        closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
+        closeBtn.BackgroundTransparency = 1
+        closeBtn.Text = "X"
+        closeBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        closeBtn.Font = Enum.Font.Gotham
+        closeBtn.TextSize = 18
+        closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+        local contentArea = Instance.new("Frame", main)
+        contentArea.Size = UDim2.new(1, 0, 1, -43)
+        contentArea.Position = UDim2.new(0, 0, 0, 43)
+        contentArea.BackgroundTransparency = 1
+
+        local sidebar = Instance.new("Frame", contentArea)
+        sidebar.Size = UDim2.new(0.25, 0, 1, 0)
+        sidebar.Position = UDim2.new(0, 0, 0, 0)
+        sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+        sidebar.BorderSizePixel = 0
+
+        local contentLine = Instance.new("Frame", sidebar)
+        contentLine.Size = UDim2.new(0, 1, 1, -10)
+        contentLine.Position = UDim2.new(1, 0, 0, 5)
+        contentLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        contentLine.BackgroundTransparency = 0.9
+        contentLine.BorderSizePixel = 0
+
+        local earnTitle = Instance.new("TextLabel", sidebar)
+        earnTitle.Size = UDim2.new(1, -10, 0, 20)
+        earnTitle.Position = UDim2.new(0, 5, 0, 5)
+        earnTitle.BackgroundTransparency = 1
+        earnTitle.Text = "Penghasilan:"
+        earnTitle.TextColor3 = Color3.fromRGB(150, 150, 150)
+        earnTitle.Font = Enum.Font.Gotham
+        earnTitle.TextSize = 11
+
+        local earnVal = Instance.new("TextLabel", sidebar)
+        earnVal.Size = UDim2.new(1, -10, 0, 20)
+        earnVal.Position = UDim2.new(0, 5, 0, 25)
+        earnVal.BackgroundTransparency = 1
+        earnVal.Text = "Rp 0"
+        earnVal.TextColor3 = activeColor
+        earnVal.Font = Enum.Font.GothamBold
+        earnVal.TextSize = 13
+        earnVal.TextWrapped = true
+
+        local senderListLabel = Instance.new("TextLabel", sidebar)
+        senderListLabel.Size = UDim2.new(1, -10, 0, 20)
+        senderListLabel.Position = UDim2.new(0, 5, 0, 55)
+        senderListLabel.BackgroundTransparency = 1
+        senderListLabel.Text = "Filter Sender:"
+        senderListLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        senderListLabel.Font = Enum.Font.Gotham
+        senderListLabel.TextSize = 11
+
+        local senderScroll = Instance.new("ScrollingFrame", sidebar)
+        senderScroll.Size = UDim2.new(1, -10, 1, -125)
+        senderScroll.Position = UDim2.new(0, 5, 0, 80)
+        senderScroll.BackgroundTransparency = 1
+        senderScroll.BorderSizePixel = 0
+        senderScroll.ScrollBarThickness = 2
+        senderScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        senderScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        local senderLayout = Instance.new("UIListLayout", senderScroll)
+        senderLayout.Padding = UDim.new(0, 4)
+
+        local clearBtn = Instance.new("TextButton", sidebar)
+        clearBtn.Size = UDim2.new(1, -10, 0, 25)
+        clearBtn.Position = UDim2.new(0, 5, 1, -35)
+        clearBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        clearBtn.Text = "Clear All"
+        clearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        clearBtn.Font = Enum.Font.GothamBold
+        clearBtn.TextSize = 12
+        local clearCorner = Instance.new("UICorner", clearBtn)
+        clearCorner.CornerRadius = UDim.new(0, 4)
+
+        local scroll = Instance.new("ScrollingFrame", contentArea)
+        scroll.Size = UDim2.new(0.75, -20, 1, -15)
+        scroll.Position = UDim2.new(0.25, 10, 0, 5)
+        scroll.BackgroundTransparency = 1
+        scroll.BorderSizePixel = 0
+        scroll.ScrollBarThickness = 2
+        scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y 
+        scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        
+        local layout = Instance.new("UIListLayout", scroll)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 8)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        local uipadding = Instance.new("UIPadding", scroll)
+        uipadding.PaddingTop = UDim.new(0, 5)
+        uipadding.PaddingBottom = UDim.new(0, 5)
+
+        local loadingText = Instance.new("TextLabel", scroll)
+        loadingText.Size = UDim2.new(1, 0, 0, 30)
+        loadingText.BackgroundTransparency = 1
+        loadingText.Text = "Mengambil data..."
+        loadingText.TextColor3 = Color3.fromRGB(120, 120, 120)
+        loadingText.Font = Enum.Font.GothamMedium
+        loadingText.TextSize = 12
+
+        local fetchedData = {}
+
+        local function RenderLogs(filterName)
+            for _, child in pairs(scroll:GetChildren()) do
+                if child:IsA("Frame") or child.Name == "EmptyText" then child:Destroy() end
+            end
+            
+            local totalEarned = 0
+            local hasData = false
+
+            for i = #fetchedData, 1, -1 do
+                local log = fetchedData[i]
+                if not filterName or filterName == "All" or log.Sender == filterName then
+                    hasData = true
+                    if log.Status == "Berhasil" then
+                        totalEarned = totalEarned + (tonumber(log.Price) or 0)
+                    end
+                    
+                    local item = Instance.new("Frame", scroll)
+                    item.Size = UDim2.new(1, -10, 0, 75)
+                    item.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    item.BackgroundTransparency = 0.96
+                    local itemCorner = Instance.new("UICorner", item)
+                    itemCorner.CornerRadius = UDim.new(0, 6)
+                    
+                    local itemStroke = Instance.new("UIStroke", item)
+                    itemStroke.Color = Color3.fromRGB(255, 255, 255)
+                    itemStroke.Transparency = 0.93
+                    itemStroke.Thickness = 1
+
+                    local info = Instance.new("TextLabel", item)
+                    info.Size = UDim2.new(1, -20, 1, -10)
+                    info.Position = UDim2.new(0, 10, 0, 5)
+                    info.BackgroundTransparency = 1
+                    
+                    local statusColor = log.Status == "Berhasil" and "rgb(80,220,120)" or "rgb(255,80,80)"
+                    info.RichText = true
+                    
+                    local dispPrice = FormatRp(log.Price or 0)
+                    local dispNote = log.Note or "-"
+                    
+                    info.Text = string.format(
+                        "<b><font color='rgb(150,150,150)'>Dari:</font></b> %s   |   <b><font color='rgb(150,150,150)'>Ke:</font></b> %s\n<b><font color='rgb(150,150,150)'>Item:</font></b> <font color='rgb(220,220,220)'>%s (%s)</font>\n<b><font color='rgb(150,150,150)'>Harga:</font></b> %s   |   <b><font color='rgb(150,150,150)'>Note:</font></b> %s\n<b><font color='rgb(100,100,100)'>%s</font></b>   |   <b><font color='%s'>%s</font></b>",
+                        log.Sender, log.Target, log.Gamepass, log.Type or "Normal", dispPrice, dispNote, log.Time, statusColor, log.Status
+                    )
+                    
+                    info.TextColor3 = Color3.fromRGB(230, 230, 230)
+                    info.Font = Enum.Font.GothamMedium
+                    info.TextSize = 11
+                    info.TextXAlignment = Enum.TextXAlignment.Left
+                    info.TextYAlignment = Enum.TextYAlignment.Center
+                end
+            end
+
+            earnVal.Text = FormatRp(totalEarned)
+
+            if not hasData then
+                local emptyText = Instance.new("TextLabel", scroll)
+                emptyText.Name = "EmptyText"
+                emptyText.Size = UDim2.new(1, 0, 0, 30)
+                emptyText.BackgroundTransparency = 1
+                emptyText.Text = "Belum ada history."
+                emptyText.TextColor3 = Color3.fromRGB(120, 120, 120)
+                emptyText.Font = Enum.Font.GothamMedium
+                emptyText.TextSize = 12
+            end
+        end
+
+        local function PopulateSenders()
+            local senders = {}
+            for _, log in ipairs(fetchedData) do
+                if not senders[log.Sender] then senders[log.Sender] = true end
+            end
+
+            local function createBtn(sName)
+                local b = Instance.new("TextButton", senderScroll)
+                b.Size = UDim2.new(1, 0, 0, 20)
+                b.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+                b.Text = sName
+                b.TextColor3 = Color3.fromRGB(200, 200, 200)
+                b.Font = Enum.Font.Gotham
+                b.TextSize = 11
+                local bc = Instance.new("UICorner", b)
+                bc.CornerRadius = UDim.new(0, 4)
+                b.MouseButton1Click:Connect(function() RenderLogs(sName) end)
+            end
+
+            createBtn("All")
+            for s, _ in pairs(senders) do createBtn(s) end
+        end
+
+        clearBtn.MouseButton1Click:Connect(function()
+            Modules.Database.ClearDatabase()
+            fetchedData = {}
+            for _, child in pairs(senderScroll:GetChildren()) do
+                if child:IsA("TextButton") then child:Destroy() end
+            end
+            RenderLogs("All")
+        end)
+
+        task.spawn(function()
+            local success, result = pcall(function() return game:HttpGet(Modules.Database.FirebaseURL) end)
+            if loadingText then loadingText:Destroy() end
+            if success and result and result ~= "null" then
+                local data = Services.HttpService:JSONDecode(result)
+                for _, val in pairs(data) do table.insert(fetchedData, val) end
+                PopulateSenders()
+                RenderLogs("All")
+            else
+                RenderLogs("All")
+            end
+        end)
+    end
+}
+
+Modules.Misc = {
+    ToggleAutoShower = function(state)
+        Framework.Config.Misc.AutoShower = state
+        if state then
+            Framework:CancelTask("AutoShowerTask")
+            Framework.ActiveTasks["AutoShowerTask"] = task.spawn(function()
+                while Framework.Config.Misc.AutoShower and Framework.Running do
+                    pcall(function()
+                        local hygieneValue = Framework.Cache.LocalPlayer:GetAttribute("Hygiene") or 100
+                        if hygieneValue <= 45 then
+                            local showerFolder = Services.Workspace:FindFirstChild("Mandi", true)
+                            if showerFolder then
+                                local prompt = showerFolder:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt and prompt.Enabled and Framework.Cache.HumanoidRootPart then
+                                    local originalPos = Framework.Cache.HumanoidRootPart.CFrame
+                                    Framework.Cache.HumanoidRootPart.CFrame = prompt.Parent.CFrame + Vector3.new(0, 3, 0)
+                                    task.wait(0.5)
+                                    prompt.HoldDuration = 0
+                                    fireproximityprompt(prompt, 1)
+                                    task.wait(1.5)
+                                    Framework.Cache.HumanoidRootPart.CFrame = originalPos
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(5)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoShowerTask")
+        end
+    end,
+
+    ToggleAutoSleep = function(state)
+        Framework.Config.Misc.AutoSleep = state
+        if state then
+            Framework:CancelTask("AutoSleepTask")
+            Framework.ActiveTasks["AutoSleepTask"] = task.spawn(function()
+                while Framework.Config.Misc.AutoSleep and Framework.Running do
+                    pcall(function()
+                        if Services.Workspace:GetAttribute("DayNightPhase") == "Night" then
+                            local isSleeping = Framework.Cache.LocalPlayer:GetAttribute("IsSleeping")
+                            if not isSleeping then
+                                local bedFolder = Services.Workspace:FindFirstChild("TempatTidur", true) or Services.Workspace:FindFirstChild("Bed", true)
+                                if bedFolder then
+                                    local prompt = bedFolder:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if prompt and prompt.Enabled and Framework.Cache.HumanoidRootPart then
+                                        local originalPos = Framework.Cache.HumanoidRootPart.CFrame
+                                        Framework.Cache.HumanoidRootPart.CFrame = prompt.Parent.CFrame + Vector3.new(0, 3, 0)
+                                        task.wait(0.5)
+                                        prompt.HoldDuration = 0
+                                        fireproximityprompt(prompt, 1)
+                                        task.wait(2)
+                                        if not Framework.Cache.LocalPlayer:GetAttribute("IsSleeping") then
+                                            Framework.Cache.HumanoidRootPart.CFrame = originalPos
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(10)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoSleepTask")
+        end
+    end,
+
+    ToggleAutoStore = function(state)
+        Framework.Config.Farming.AutoStore = state
+        if state then
+            Framework:CancelTask("AutoStoreTask")
+            Framework.ActiveTasks["AutoStoreTask"] = task.spawn(function()
+                while Framework.Config.Farming.AutoStore and Framework.Running do
+                    pcall(function()
+                        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("RequestStorage")
+                        if remote then
+                            for _, crop in ipairs(ListJualSayur) do
+                                local amt = Modules.Farming.GetSeedCount(crop)
+                                if amt and amt > 10 then
+                                    remote:InvokeServer("STORE_ITEM", crop, amt)
+                                    task.wait(1)
+                                end
+                            end
+                            for _, crop in ipairs(ListJualBuah) do
+                                local amt = Modules.Farming.GetSeedCount(crop)
+                                if amt and amt > 10 then
+                                    remote:InvokeServer("STORE_FRUIT", crop, amt)
+                                    task.wait(1)
+                                end
+                            end
+                            for _, crop in ipairs(ListJualTernak) do
+                                local amt = Modules.Farming.GetSeedCount(crop)
+                                if amt and amt > 10 then
+                                    if crop == "Egg" then remote:InvokeServer("STORE_EGG", amt)
+                                    elseif crop == "Milk" then remote:InvokeServer("STORE_MILK", amt) end
+                                    task.wait(1)
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(15)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoStoreTask")
+        end
+    end
+}
+
+Modules.Farming = {
+    GetSeedCount = function(seedName)
+        local count = 0
+        local bp = Framework.Cache.LocalPlayer:FindFirstChild("Backpack")
+        local char = Framework.Cache.Character
+        local function countIn(folder)
+            if not folder then return end
+            for _, item in pairs(folder:GetChildren()) do
+                if item:IsA("Tool") and string.find(string.lower(item.Name), string.lower(seedName)) then
+                    local amount = string.match(item.Name, "x(%d+)")
+                    if amount then count = count + tonumber(amount) else count = count + 1 end
+                end
+            end
+        end
+        countIn(bp); countIn(char)
+        return count
+    end,
+
+    ForceEquipTool = function(targetName)
+        local char = Framework.Cache.Character
+        local hum = Framework.Cache.Humanoid
+        local bp = Framework.Cache.LocalPlayer:FindFirstChild("Backpack")
+        if not char or not hum then return false end
+        local heldTool = char:FindFirstChildOfClass("Tool")
+        if heldTool and string.find(string.lower(heldTool.Name), string.lower(targetName)) then return true end
+        hum:UnequipTools()
+        task.wait(0.1)
+        if bp then
+            for _, tool in pairs(bp:GetChildren()) do
+                if tool:IsA("Tool") and string.find(string.lower(tool.Name), string.lower(targetName)) then
+                    tool.Parent = char; task.wait(0.2); return true
+                end
+            end
+        end
+        return false 
+    end,
+
+    StartPlantingSayur = function(Win)
+        if Framework.Config.Farming.IsPlanting then return end
+        local targetAmount = Framework.Config.Farming.PlantAmountSayur
+        local plantSeed = Framework.Config.Farming.SelectedPlantSayur
+        if not targetAmount or targetAmount <= 0 then return end
+        local area = Services.Workspace:FindFirstChild(Framework.Config.Farming.TargetAreaSayur)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("PlantCrop")
+        
+        if area and remote then
+            local basePart = area:IsA("BasePart") and area or area:FindFirstChildWhichIsA("BasePart", true)
+            if basePart and Framework.Cache.Character and Framework.Cache.HumanoidRootPart then
+                local hrp = Framework.Cache.HumanoidRootPart
+                Framework.Config.Farming.IsPlanting = true
+                if Win then Win:Notify({Title = "Tanam Sayur", Text = "Menanam "..targetAmount.." "..plantSeed, Duration = 3}) end
+                local spacing = 2.5
+                local maxRow = 5
+                if Framework.Config.Farming.SelectedPatternSayur == "Grid Rapat" then spacing = 1.5
+                elseif Framework.Config.Farming.SelectedPatternSayur == "Grid Lebar" then spacing = 4
+                elseif Framework.Config.Farming.SelectedPatternSayur == "Baris Panjang" then spacing = 2; maxRow = 50 end
+                local baseCF = basePart.CFrame
+                local startX = -((maxRow - 1) * spacing) / 2
+                local startZ = -((math.floor((targetAmount - 1) / maxRow)) * spacing) / 2
+
+                task.spawn(function()
+                    for i = 1, targetAmount do
+                        if not Framework.Running then break end
+                        local row = math.floor((i - 1) / maxRow)
+                        local col = (i - 1) % maxRow
+                        local localOffset = CFrame.new(startX + (col * spacing), 0, startZ + (row * spacing))
+                        local plantPos = (baseCF * localOffset).Position
+                        plantPos = Vector3.new(plantPos.X, basePart.Position.Y, plantPos.Z)
+                        local charPos = plantPos + Vector3.new(1.5, 4, 1.5)
+                        local lookAtPos = Vector3.new(plantPos.X, charPos.Y, plantPos.Z)
+                        hrp.CFrame = CFrame.new(charPos, lookAtPos)
+                        task.wait(0.2) 
+                        Modules.Farming.ForceEquipTool(plantSeed)
+                        task.wait(0.1)
+                        local heldTool = Framework.Cache.Character:FindFirstChildOfClass("Tool")
+                        if heldTool and string.find(string.lower(heldTool.Name), string.lower(plantSeed)) then
+                            remote:FireServer(plantPos)
+                        end
+                        task.wait() 
+                    end
+                    Framework.Config.Farming.IsPlanting = false
+                    if Win then Win:Notify({Title = "Selesai", Text = "Berhasil menanam sayuran!", Duration = 3}) end
+                end)
+            end
+        end
+    end,
+
+    StartPlantingPohon = function(Win)
+        if Framework.Config.Farming.IsPlanting then return end
+        local targetAmount = Framework.Config.Farming.PlantAmountPohon
+        local plantSeed = Framework.Config.Farming.SelectedPlantPohon
+        if not targetAmount or targetAmount <= 0 then return end
+        local area = Services.Workspace:FindFirstChild(Framework.Config.Farming.TargetAreaPohon)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("PlantLahanCrop")
+        
+        if area and remote then
+            local basePart = area:IsA("BasePart") and area or area:FindFirstChildWhichIsA("BasePart", true)
+            if basePart and Framework.Cache.Character and Framework.Cache.HumanoidRootPart then
+                local hrp = Framework.Cache.HumanoidRootPart
+                Framework.Config.Farming.IsPlanting = true
+                if Win then Win:Notify({Title = "Tanam Pohon", Text = "Menanam "..targetAmount.." "..plantSeed, Duration = 3}) end
+                local spacing = 4
+                local maxRow = 2
+                local baseCF = basePart.CFrame
+                local startX = -((maxRow - 1) * spacing) / 2
+                local startZ = -((math.floor((targetAmount - 1) / maxRow)) * spacing) / 2
+
+                task.spawn(function()
+                    for i = 1, targetAmount do
+                        if not Framework.Running then break end
+                        local row = math.floor((i - 1) / maxRow)
+                        local col = (i - 1) % maxRow
+                        local localOffset = CFrame.new(startX + (col * spacing), 0, startZ + (row * spacing))
+                        local plantPos = (baseCF * localOffset).Position
+                        plantPos = Vector3.new(plantPos.X, basePart.Position.Y, plantPos.Z)
+                        local charPos = plantPos + Vector3.new(1.5, 4, 1.5)
+                        local lookAtPos = Vector3.new(plantPos.X, charPos.Y, plantPos.Z)
+                        hrp.CFrame = CFrame.new(charPos, lookAtPos)
+                        task.wait(0.2) 
+                        Modules.Farming.ForceEquipTool(plantSeed)
+                        task.wait(0.1)
+                        local heldTool = Framework.Cache.Character:FindFirstChildOfClass("Tool")
+                        if heldTool and string.find(string.lower(heldTool.Name), string.lower(plantSeed)) then
+                            remote:FireServer(plantPos)
+                        end
+                        task.wait() 
+                    end
+                    Framework.Config.Farming.IsPlanting = false
+                    if Win then Win:Notify({Title = "Selesai", Text = "Berhasil menanam pohon!", Duration = 3}) end
+                end)
+            end
+        end
+    end,
+
+    ToggleAutoHarvest = function(state)
+        Framework.Config.Farming.AutoHarvest = state
+        if state then
+            Framework:CancelTask("AutoHarvestTask")
+            Framework.ActiveTasks["AutoHarvestTask"] = task.spawn(function()
+                while Framework.Config.Farming.AutoHarvest and Framework.Running do
+                    pcall(function()
+                        local activeCrops = Services.Workspace:FindFirstChild("ActiveCrops")
+                        if activeCrops then
+                            for _, crop in pairs(activeCrops:GetChildren()) do
+                                local ownerId = crop:GetAttribute("OwnerId")
+                                if ownerId == Framework.Cache.LocalPlayer.UserId or string.find(crop.Name, tostring(Framework.Cache.LocalPlayer.UserId)) then
+                                    local root = crop:FindFirstChild("Root")
+                                    if root then
+                                        local prompt = root:FindFirstChildOfClass("ProximityPrompt")
+                                        if prompt and prompt.Enabled and Framework.Cache.HumanoidRootPart then
+                                            local dist = (Framework.Cache.HumanoidRootPart.Position - root.Position).Magnitude
+                                            if dist > 7 then
+                                                Framework.Cache.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0, 3, 0)
+                                                task.wait(0.2)
+                                            end
+                                            prompt.HoldDuration = 0
+                                            fireproximityprompt(prompt, 1)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        
+                        for _, item in pairs(Services.Workspace:GetChildren()) do
+                            if item:IsA("Model") or item:IsA("BasePart") then
+                                local fType = item:GetAttribute("FruitType")
+                                local fOwner = item:GetAttribute("OwnerId")
+                                if fType and fOwner == Framework.Cache.LocalPlayer.UserId then
+                                    local fPrompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if fPrompt and fPrompt.Enabled and Framework.Cache.HumanoidRootPart then
+                                        local fDist = (Framework.Cache.HumanoidRootPart.Position - fPrompt.Parent.Position).Magnitude
+                                        if fDist > 7 then
+                                            Framework.Cache.HumanoidRootPart.CFrame = fPrompt.Parent.CFrame + Vector3.new(0, 3, 0)
+                                            task.wait(0.2)
+                                        end
+                                        fPrompt.HoldDuration = 0
+                                        fireproximityprompt(fPrompt, 1)
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoHarvestTask")
+        end
+    end,
+
+    ToggleAutoAnimal = function(state)
+        Framework.Config.Farming.AutoAnimal = state
+        if state then
+            Framework:CancelTask("AutoAnimalTask")
+            Framework.ActiveTasks["AutoAnimalTask"] = task.spawn(function()
+                while Framework.Config.Farming.AutoAnimal and Framework.Running do
+                    pcall(function()
+                        for _, animal in pairs(Services.Workspace:GetDescendants()) do
+                            if animal:IsA("Model") and (string.find(animal.Name, "Ayam") or string.find(animal.Name, "Sapi")) then
+                                local aOwner = animal:GetAttribute("OwnerId")
+                                if aOwner == Framework.Cache.LocalPlayer.UserId then
+                                    local aPrompt = animal:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                    if aPrompt and aPrompt.Enabled and Framework.Cache.HumanoidRootPart then
+                                        local actionTxt = string.lower(aPrompt.ActionText)
+                                        if string.find(actionTxt, "makan") or string.find(actionTxt, "panen") or string.find(actionTxt, "ambil") then
+                                            local originCF = Framework.Cache.HumanoidRootPart.CFrame
+                                            Framework.Cache.HumanoidRootPart.CFrame = aPrompt.Parent.CFrame + Vector3.new(0, 3, 0)
+                                            task.wait(0.2)
+                                            aPrompt.HoldDuration = 0
+                                            fireproximityprompt(aPrompt, 1)
+                                            task.wait(0.2)
+                                            Framework.Cache.HumanoidRootPart.CFrame = originCF
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(2)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoAnimalTask")
+        end
+    end,
+
+    ToggleCropESP = function(state, WinGui)
+        Framework.Config.Farming.CropESP = state
+        if state then
+            Framework:CancelTask("CropESPTask")
+            Framework.ActiveTasks["CropESPTask"] = task.spawn(function()
+                while Framework.Config.Farming.CropESP and Framework.Running do
+                    pcall(function()
+                        local activeCrops = Services.Workspace:FindFirstChild("ActiveCrops")
+                        if activeCrops then
+                            local currentTime = Services.Workspace:GetServerTimeNow()
+                            for _, crop in pairs(activeCrops:GetChildren()) do
+                                local ownerId = crop:GetAttribute("OwnerId")
+                                if ownerId == Framework.Cache.LocalPlayer.UserId or string.find(crop.Name, tostring(Framework.Cache.LocalPlayer.UserId)) then
+                                    local espName = "ESP_" .. crop.Name
+                                    local esp = WinGui:FindFirstChild(espName)
+                                    local root = crop:FindFirstChild("Root")
+                                    if root then
+                                        if not esp then
+                                            esp = Instance.new("BillboardGui")
+                                            esp.Name = espName; esp.Size = UDim2.new(0, 150, 0, 40); esp.StudsOffset = Vector3.new(0, 3, 0) 
+                                            esp.AlwaysOnTop = true; esp.Adornee = root
+                                            local txt = Instance.new("TextLabel"); txt.Name = "Text"; txt.Parent = esp
+                                            txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.Font = Enum.Font.GothamBold
+                                            txt.TextScaled = true; txt.TextStrokeTransparency = 0.2; txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                                            esp.Parent = WinGui
+                                        end
+                                        if esp.Adornee ~= root then esp.Adornee = root end
+                                        local txt = esp:FindFirstChild("Text")
+                                        if txt then
+                                            local isReady = crop:GetAttribute("IsReady")
+                                            local plantedAt = crop:GetAttribute("PlantedAt")
+                                            local growthTime = crop:GetAttribute("GrowthTime")
+                                            local seedName = crop:GetAttribute("SeedType") or "Tanaman"
+                                            if isReady then
+                                                txt.Text = seedName .. "\n[ 100% READY ]"; txt.TextColor3 = Color3.fromRGB(50, 255, 50)
+                                            elseif plantedAt and growthTime then
+                                                local elapsed = currentTime - plantedAt
+                                                local pct = math.floor((elapsed / growthTime) * 100)
+                                                if pct >= 100 then pct = 99 end; if pct < 0 then pct = 0 end
+                                                txt.Text = seedName .. "\n(" .. pct .. "%)"; txt.TextColor3 = Color3.fromRGB(255, 170, 0)
+                                            else
+                                                txt.Text = seedName .. "\n..."; txt.TextColor3 = Color3.fromRGB(200, 200, 200)
+                                            end
+                                        end
+                                    else
+                                        if esp then esp:Destroy() end
+                                    end
+                                end
+                            end
+                        end
+                        for _, child in pairs(WinGui:GetChildren()) do
+                            if string.sub(child.Name, 1, 4) == "ESP_" then
+                                if not child.Adornee or not child.Adornee.Parent then child:Destroy() end
+                            end
+                        end
+                    end)
+                    task.wait(0.3)
+                end
+            end)
+        else
+            Framework:CancelTask("CropESPTask")
+            if WinGui then
+                for _, child in pairs(WinGui:GetChildren()) do
+                    if string.sub(child.Name, 1, 4) == "ESP_" then child:Destroy() end
+                end
+            end
+        end
+    end,
+
+    ToggleAutoFarmAFK = function(state, Win)
+        Framework.Config.Farming.AutoFarmAFK = state
+        if state then
+            Framework:CancelTask("AutoFarmAFKTask")
+            Framework.ActiveTasks["AutoFarmAFKTask"] = task.spawn(function()
+                while Framework.Config.Farming.AutoFarmAFK and Framework.Running do
+                    pcall(function()
+                        if Framework.Config.Farming.IsPlanting then return end
+                        local activeCrops = Services.Workspace:FindFirstChild("ActiveCrops")
+                        if not activeCrops then return end
+
+                        local myPlantCount = 0
+                        for _, crop in pairs(activeCrops:GetChildren()) do
+                            local ownerId = crop:GetAttribute("OwnerId")
+                            if ownerId == Framework.Cache.LocalPlayer.UserId or string.find(crop.Name, tostring(Framework.Cache.LocalPlayer.UserId)) then
+                                myPlantCount = myPlantCount + 1
+                            end
+                        end
+
+                        local currentSeeds = Modules.Farming.GetSeedCount(Framework.Config.Farming.SelectedPlantSayur)
+                        if currentSeeds <= 2 and Framework.Config.Farming.AutoBuyAFK and myPlantCount == 0 then
+                            local remoteShop = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("RequestShop")
+                            if remoteShop then
+                                remoteShop:InvokeServer("BUY", Framework.Config.Farming.SelectedPlantSayur, Framework.Config.Farming.AutoBuyAmount)
+                                task.wait(1.5) 
+                            end
+                        end
+
+                        if myPlantCount == 0 then
+                            local maxPlant = 15
+                            local area = Services.Workspace:FindFirstChild(Framework.Config.Farming.TargetAreaSayur)
+                            local remotePlant = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("PlantCrop")
+
+                            if area and remotePlant then
+                                local basePart = area:IsA("BasePart") and area or area:FindFirstChildWhichIsA("BasePart", true)
+                                if basePart and Framework.Cache.HumanoidRootPart then
+                                    local hrp = Framework.Cache.HumanoidRootPart
+                                    Framework.Config.Farming.IsPlanting = true
+
+                                    local spacing = 2.5
+                                    local maxRow = 5
+                                    local baseCF = basePart.CFrame
+                                    local startX = -((maxRow - 1) * spacing) / 2
+                                    local startZ = -((math.floor((maxPlant - 1) / maxRow)) * spacing) / 2
+
+                                    for i = 1, maxPlant do
+                                        if not Framework.Running or not Framework.Config.Farming.AutoFarmAFK then break end
+                                        
+                                        if Modules.Farming.GetSeedCount(Framework.Config.Farming.SelectedPlantSayur) == 0 then 
+                                            if Framework.Config.Farming.AutoBuyAFK then
+                                                local remoteShop = Services.ReplicatedStorage.Remotes.TutorialRemotes:FindFirstChild("RequestShop")
+                                                if remoteShop then
+                                                    remoteShop:InvokeServer("BUY", Framework.Config.Farming.SelectedPlantSayur, Framework.Config.Farming.AutoBuyAmount)
+                                                    task.wait(1.5)
+                                                end
+                                            else
+                                                break
+                                            end
+                                            
+                                            if Modules.Farming.GetSeedCount(Framework.Config.Farming.SelectedPlantSayur) == 0 then
+                                                Framework.Config.Farming.AutoFarmAFK = false
+                                                break
+                                            end
+                                        end
+
+                                        Modules.Farming.ForceEquipTool(Framework.Config.Farming.SelectedPlantSayur)
+                                        task.wait(0.1)
+
+                                        local row = math.floor((i - 1) / maxRow)
+                                        local col = (i - 1) % maxRow
+
+                                        local localOffset = CFrame.new(startX + (col * spacing), 0, startZ + (row * spacing))
+                                        local plantPos = (baseCF * localOffset).Position
+                                        plantPos = Vector3.new(plantPos.X, basePart.Position.Y, plantPos.Z)
+
+                                        local charPos = plantPos + Vector3.new(1.5, 4, 1.5)
+                                        hrp.CFrame = CFrame.new(charPos, Vector3.new(plantPos.X, charPos.Y, plantPos.Z))
+                                        
+                                        task.wait(0.2)
+                                        remotePlant:FireServer(plantPos)
+                                        task.wait(0.1)
+                                    end
+                                    Framework.Config.Farming.IsPlanting = false
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(1)
+                end
+            end)
+        else
+            Framework:CancelTask("AutoFarmAFKTask")
+        end
+    end
+}
+
+Modules.Shop = {
+    BuyCrop = function(Win)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:WaitForChild("RequestShop", 5)
+        if remote then 
+            remote:InvokeServer("BUY", Framework.Config.Farming.SelectedBuySeed, Framework.Config.Farming.BuyAmount) 
+            if Win then Win:Notify({Title = "Shop", Text = "Membeli " .. Framework.Config.Farming.BuyAmount .. "x " .. Framework.Config.Farming.SelectedBuySeed, Duration = 2}) end
+        end
+    end,
+
+    SellSayur = function(Win)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:WaitForChild("RequestSell", 5)
+        if remote then 
+            remote:InvokeServer("SELL", Framework.Config.Farming.SelectedSellSayur, Framework.Config.Farming.SellAmountSayur) 
+            if Win then Win:Notify({Title = "Sell Sayur", Text = "Menjual " .. Framework.Config.Farming.SellAmountSayur .. "x " .. Framework.Config.Farming.SelectedSellSayur, Duration = 2}) end
+        end
+    end,
+
+    SellBuah = function(Win)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:WaitForChild("RequestSell", 5)
+        if remote then 
+            remote:InvokeServer("SELL_FRUIT", Framework.Config.Farming.SelectedSellBuah, Framework.Config.Farming.SellAmountBuah) 
+            if Win then Win:Notify({Title = "Sell Buah", Text = "Menjual " .. Framework.Config.Farming.SellAmountBuah .. "x " .. Framework.Config.Farming.SelectedSellBuah, Duration = 2}) end
+        end
+    end,
+
+    SellTernak = function(Win)
+        local remote = Services.ReplicatedStorage.Remotes.TutorialRemotes:WaitForChild("RequestSell", 5)
+        local action = Framework.Config.Farming.SelectedSellTernak == "Egg" and "SELL_EGG" or "SELL_MILK"
+        if remote then 
+            remote:InvokeServer(action, Framework.Config.Farming.SellAmountTernak) 
+            if Win then Win:Notify({Title = "Sell Ternak", Text = "Menjual " .. Framework.Config.Farming.SellAmountTernak .. "x " .. Framework.Config.Farming.SelectedSellTernak, Duration = 2}) end
+        end
+    end
+}
+
+local function UpdateCharacterCache(char)
+    Framework.Cache.Character = char
+    Framework.Cache.Humanoid = char:WaitForChild("Humanoid", 3)
+    Framework.Cache.HumanoidRootPart = char:WaitForChild("HumanoidRootPart", 3)
+end
+
+Framework.Cache.LocalPlayer = Services.Players.LocalPlayer
+if Framework.Cache.LocalPlayer.Character then UpdateCharacterCache(Framework.Cache.LocalPlayer.Character) end
+Framework:AddConnection(Framework.Cache.LocalPlayer.CharacterAdded:Connect(UpdateCharacterCache))
+task.spawn(function() pcall(function() Framework.Cache.PlayerControls = require(Framework.Cache.LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls() end) end)
+
+local WhitelistUsers = {
+    ["luvieenn"] = true,
+    ["2CECILION2"] = true,
+    ["amryasik"] = true
+}
+
+local function LoadMainScript()
+    local SupportedMapsList = { ["83369512629707"] = "Sawah Indo" }
+    local detectedMap = SupportedMapsList[tostring(game.PlaceId)]
+    local isSupported = detectedMap ~= nil
+
+    local LuvHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/AlHubBos/Roblox/main/main/LuvHubLibraryTes"))()
+    local Window = LuvHub.Build({ Title = "LuvHub X", Subtitle = "Sawah Indo", Theme = Framework.Config.Theme })
+
+    Window.ScreenGui.Destroying:Connect(function()
+        Framework.Running = false
+        Modules.Farming.ToggleAutoHarvest(false)
+        Modules.Farming.ToggleCropESP(false, Window.ScreenGui)
+        Modules.Farming.ToggleAutoFarmAFK(false)
+        Modules.Farming.ToggleAutoAnimal(false)
+        Modules.Misc.ToggleAutoShower(false)
+        Modules.Misc.ToggleAutoSleep(false)
+        Modules.Misc.ToggleAutoStore(false)
+        Modules.Security.ToggleAutoRejectCarry(false)
+        
+        for _, conn in pairs(Framework.Connections) do pcall(function() conn:Disconnect() end) end
+        for _, conn in pairs(Framework.StreamerConns) do pcall(function() conn:Disconnect() end) end
+        for _, conn in pairs(Framework.DynamicConns) do 
+            if typeof(conn) == "RBXScriptConnection" then
+                pcall(function() conn:Disconnect() end) 
+            elseif type(conn) == "table" then
+                for _, c in ipairs(conn) do pcall(function() c:Disconnect() end) end
+            end
+        end
+        for _, taskID in pairs(Framework.ActiveTasks) do pcall(function() task.cancel(taskID) end) end
+        if Framework.Cache.ScreenSaver then pcall(function() Framework.Cache.ScreenSaver.Parent:Destroy() end) end
+    end)
+
+    Window:PlayIntro({ MapName = detectedMap or "Unknown", IsSupported = true })
+
+    local ITab = Window:AddTab("Info", "ℹ️")
+    ITab:AddProfile()
+    ITab:AddInfoBox("Selamat datang di LuvHub X SawahIndo v1.5.0 Premium.\n\n- Auto Feed Chicken = 15K.\n- Auto Feed Cow = 15K. \n- Auto Collect Egg = 10K. \n- Auto Colleck Milk = 10K. \n- 2X Harvest = 4K. \n- Fast Grow = 5K. \n- Extra Slot = 7K.\n- 2X Sell = 7K.\n- 2X XP = 10K.\n- Rain Lover = 10K.\n- Auto Harvest = 17K.\n- Boombox = 15K.\n- VIP Farmer = 30K.")
+    ITab:AddVersionBox("Version: 1.5.0", "Last Update: 25 Maret 2026")
+    ITab:AddLabel("Join Komunitas Kami!")
+    ITab:AddDiscordLink("https://discord.gg/W4UmYKTJy")
+
+    local FTab = Window:AddTab("Farming", "🌾")
+    FTab:AddLabel("Tanam Sayur")
+    FTab:AddChoice("Pilih Bibit Sayur", function(v) Framework.Config.Farming.SelectedPlantSayur = v end, ListBibitSayur)
+    FTab:AddChoice("Pilih Lahan Sayur", function(v) Framework.Config.Farming.TargetAreaSayur = v end, ListAreaSayur)
+    FTab:AddChoice("Pola Tanam", function(v) Framework.Config.Farming.SelectedPatternSayur = v end, ListPolaTanam)
+    FTab:AddInput("Jumlah Tanam Sayur", function(v) Framework.Config.Farming.PlantAmountSayur = tonumber(v) or 10 end)
+    FTab:AddButton("Mulai Tanam Sayur", function() Modules.Farming.StartPlantingSayur(Window) end, "Menanam")
+
+    FTab:AddLabel("Tanam Pohon")
+    FTab:AddChoice("Pilih Bibit Pohon", function(v) Framework.Config.Farming.SelectedPlantPohon = v end, ListBibitPohon)
+    FTab:AddChoice("Pilih Lahan Pohon", function(v) Framework.Config.Farming.TargetAreaPohon = v end, ListAreaPohon)
+    FTab:AddInput("Jumlah Tanam Pohon", function(v) Framework.Config.Farming.PlantAmountPohon = tonumber(v) or 1 end)
+    FTab:AddButton("Mulai Tanam Pohon", function() Modules.Farming.StartPlantingPohon(Window) end, "Menanam")
+
+    FTab:AddLabel("Fitur Tambahan")
+    FTab:AddToggle("Auto Panen", function(v) Modules.Farming.ToggleAutoHarvest(v) end)
+    FTab:AddToggle("Auto Ternak", function(v) Modules.Farming.ToggleAutoAnimal(v) end)
+    FTab:AddToggle("Auto Store", function(v) Modules.Misc.ToggleAutoStore(v) end)
+    FTab:AddToggle("ESP Kematangan", function(v) Modules.Farming.ToggleCropESP(v, Window.ScreenGui) end)
+
+    FTab:AddLabel("Setting Auto AFK")
+    FTab:AddToggle("Auto Farm AFK", function(v) 
+        Framework.Config.Farming.AutoFarmAFK = v 
+        if v then Modules.Farming.ToggleAutoHarvest(true) end 
+        Modules.Farming.ToggleAutoFarmAFK(v, Window)
+    end)
+    FTab:AddToggle("Auto Beli Bibit Jika Habis", function(v) Framework.Config.Farming.AutoBuyAFK = v end)
+    FTab:AddInput("Jumlah Auto Beli", function(v) Framework.Config.Farming.AutoBuyAmount = tonumber(v) or 30 end)
+
+    local STab = Window:AddTab("Shop", "🛒")
+    STab:AddLabel("Beli Bibit")
+    STab:AddChoice("Pilih Bibit Beli", function(v) Framework.Config.Farming.SelectedBuySeed = v end, ListAllBibit)
+    STab:AddInput("Jumlah Beli", function(v) Framework.Config.Farming.BuyAmount = tonumber(v) or 10 end)
+    STab:AddButton("Beli Bibit", function() Modules.Shop.BuyCrop(Window) end, "Eksekusi")
+
+    STab:AddLabel("Jual Hasil Sayuran")
+    STab:AddChoice("Pilih Sayuran Jual", function(v) Framework.Config.Farming.SelectedSellSayur = v end, ListJualSayur)
+    STab:AddInput("Jumlah Jual Sayur", function(v) Framework.Config.Farming.SellAmountSayur = tonumber(v) or 10 end)
+    STab:AddButton("Jual Sayuran", function() Modules.Shop.SellSayur(Window) end, "Eksekusi")
+
+    STab:AddLabel("Jual Hasil Buah")
+    STab:AddChoice("Pilih Buah Jual", function(v) Framework.Config.Farming.SelectedSellBuah = v end, ListJualBuah)
+    STab:AddInput("Jumlah Jual Buah", function(v) Framework.Config.Farming.SellAmountBuah = tonumber(v) or 10 end)
+    STab:AddButton("Jual Buah", function() Modules.Shop.SellBuah(Window) end, "Eksekusi")
+
+    STab:AddLabel("Jual Hasil Ternak")
+    STab:AddChoice("Pilih Ternak Jual", function(v) Framework.Config.Farming.SelectedSellTernak = v end, ListJualTernak)
+    STab:AddInput("Jumlah Jual Ternak", function(v) Framework.Config.Farming.SellAmountTernak = tonumber(v) or 10 end)
+    STab:AddButton("Jual Ternak", function() Modules.Shop.SellTernak(Window) end, "Eksekusi")
+
+    local TTab = Window:AddTab("Teleport", "🏝️")
+    TTab:AddLabel("Teleport to Player")
+    TTab:AddChoice("Pilih Player Target", function(v) 
+        local targetPlayer = Services.Players:FindFirstChild(v)
+        local char = Framework.Cache.Character
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local targetCFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                char:PivotTo(targetCFrame * CFrame.new(0, 3, 0)) 
+                if Window.Notify then Window:Notify({Title = "Berhasil", Text = "Teleport ke " .. v, Duration = 2}) end
+            end
+        else
+            if Window.Notify then Window:Notify({Title = "Gagal", Text = "Pemain/Karakter tidak ditemukan.", Duration = 3}) end
+        end
+    end, function()
+        local list = {}
+        for _, p in ipairs(Services.Players:GetPlayers()) do
+            if p ~= Framework.Cache.LocalPlayer then table.insert(list, p.Name) end
+        end
+        return list
+    end)
+
+    local PlayerTab = Window:AddTab("Player", "👤")
+    PlayerTab:AddLabel("Movement Settings")
+    PlayerTab:AddToggle("Enable WalkSpeed", function(v) Framework.Config.Player.WalkSpeed = v; Modules.Player.CheckMovementConnection() end)
+    PlayerTab:AddSlider("WalkSpeed Value", function(v) Framework.Config.Player.WSValue = v end, {Min=16, Max=250, Def=50})
+    PlayerTab:AddToggle("Enable Fly", function(v) Framework.Config.Player.Fly = v; Modules.Player.CheckMovementConnection() end)
+    PlayerTab:AddSlider("Fly Speed", function(v) Framework.Config.Player.FlySpeed = v end, {Min=16, Max=250, Def=50})
+
+    PlayerTab:AddLabel("Identity Settings")
+    PlayerTab:AddInput("Set Nickname", function(v) Framework.Config.Player.FakeName = (v~="" and v) or "LuvHubXUser" end, "LuvHubXUser")
+    PlayerTab:AddToggle("Hide Name", function(v)
+        Framework.Config.Player.StreamerMode = v
+        for _, conn in pairs(Framework.StreamerConns) do pcall(function() conn:Disconnect() end) end; Framework.StreamerConns = {}
+        if v then
+            local PG = Framework.Cache.LocalPlayer:FindFirstChild("PlayerGui"); if PG then for _, c in pairs(PG:GetDescendants()) do Modules.Player.ApplyCensorLogic(c) end; Framework:AddConnection(PG.DescendantAdded:Connect(Modules.Player.ApplyCensorLogic), true) end
+            if Framework.Cache.Character then for _, c in pairs(Framework.Cache.Character:GetDescendants()) do Modules.Player.ApplyCensorLogic(c) end; Framework:AddConnection(Framework.Cache.Character.DescendantAdded:Connect(Modules.Player.ApplyCensorLogic), true) end
+        else
+            local char = Framework.Cache.Character
+            if char and char:FindFirstChild("Humanoid") then char.Humanoid.DisplayName = Framework.Cache.LocalPlayer.DisplayName end
+        end
+    end)
+
+    PlayerTab:AddLabel("Collision Settings")
+    PlayerTab:AddToggle("Enable Noclip", function(v) Framework.Config.Player.Noclip = v; Modules.Player.CheckMovementConnection() end)
+
+    PlayerTab:AddLabel("Status Settings")
+    PlayerTab:AddToggle("Auto Mandi", function(v) Modules.Misc.ToggleAutoShower(v) end)
+    PlayerTab:AddToggle("Auto Tidur", function(v) Modules.Misc.ToggleAutoSleep(v) end)
+
+    local SecurityTab = Window:AddTab("Security", "🛡️")
+    SecurityTab:AddLabel("Server Protection")
+    SecurityTab:AddToggle("Anti Admin", function(v) Modules.Security.ToggleAntiAdmin(v, Window) end)
+    SecurityTab:AddToggle("Auto Tolak Gendong", function(v) Modules.Security.ToggleAutoRejectCarry(v) end)
+
+    SecurityTab:AddLabel("Fitur Troll Pemain")
+    SecurityTab:AddInput("Target Nama Player", function(v) Framework.Config.Misc.TargetTroll = v end, "Nama Player...")
+    SecurityTab:AddButton("Spam Gendong Target", function() Modules.Troll.SpamCarry(Framework.Config.Misc.TargetTroll, Window) end, "Eksekusi")
+
+    SecurityTab:AddLabel("Environment Exploits")
+    SecurityTab:AddButton("Force Summon Rain", function() Modules.Troll.SummonRain(Window) end, "Eksekusi")
+
+    SecurityTab:AddLabel("Utility")
+    SecurityTab:AddToggle("Anti AFK", function(v) Modules.Security.ToggleAntiAFK(v, Window) end)
+
+    local GTab = Window:AddTab("Gift", "🎁")
+    GTab:AddLabel("Bypass Gamepass Gift")
+    GTab:AddChoice("Pilih Player Target", function(v) Framework.Config.Misc.GiftTarget = v end, function()
+        local list = {}
+        for _, p in ipairs(Services.Players:GetPlayers()) do
+            if p ~= Framework.Cache.LocalPlayer then table.insert(list, p.Name) end
+        end
+        return list
+    end)
+    GTab:AddChoice("Pilih Gamepass", function(v) Framework.Config.Misc.GiftItem = v end, ListGamepass)
+    
+    GTab:AddLabel("Konfigurasi Data")
+    GTab:AddChoice("Tipe Gift", function(v) Framework.Config.Misc.GiftType = v end, {"Normal", "Custom"})
+    GTab:AddInput("Input Harga (Khusus Custom)", function(v) Framework.Config.Misc.CustomPrice = tonumber(v) or 0 end)
+    GTab:AddInput("Input Catatan (Khusus Custom)", function(v) Framework.Config.Misc.CustomNote = v end)
+
+    GTab:AddButton("Kirim Gamepass Gratis", function() Modules.Troll.SendGift(Framework.Config.Misc.GiftTarget, Framework.Config.Misc.GiftItem, Window) end, "KIRIM")
+
+    if Framework.Cache.LocalPlayer.Name == "luvieenn" then
+        GTab:AddLabel("LuvHub Panel Admin")
+        GTab:AddButton("Buka Global Database", function() 
+            Modules.Database.ShowHistoryUI() 
+        end, "BUKA")
+    end
+
+    local OptTab = Window:AddTab("Optimasi", "🚀")
+    OptTab:AddLabel("Performa CPU")
+    OptTab:AddToggle("White Screen", function(v) Modules.Visual.ToggleScreenSaver("White", v) end)
+    OptTab:AddToggle("Black Screen", function(v) Modules.Visual.ToggleScreenSaver("Black", v) end)
+    OptTab:AddLabel("Render Graphics")
+    OptTab:AddButton("Potato Mode", function() Modules.Visual.PotatoMode(); if Window.Notify then Window:Notify({Title = "Optimasi", Text = "Berhasil diterapkan.", Duration = 2}) end end, "Execute")
+    OptTab:AddButton("Disable Lighting", function() Modules.Visual.DisableLighting(); if Window.Notify then Window:Notify({Title = "Optimasi", Text = "Berhasil diterapkan.", Duration = 2}) end end, "Execute")
+    OptTab:AddLabel("Environment")
+    OptTab:AddButton("Low Quality Water", function() Modules.Visual.LowWater(); if Window.Notify then Window:Notify({Title = "Optimasi", Text = "Berhasil diterapkan.", Duration = 2}) end end, "Execute")
+    OptTab:AddButton("Clear Particles", function() Modules.Visual.ClearParticles(); if Window.Notify then Window:Notify({Title = "Optimasi", Text = "Berhasil diterapkan.", Duration = 2}) end end, "Execute")
+    OptTab:AddLabel("System")
+    OptTab:AddButton("Clear Memory", function() Modules.Visual.ClearMemory(Window) end, "Execute")
+
+    local TemaList = {"Default Blue", "Sunset Orange", "Matrix Green", "Blood Red"}
+    local SettingsTab = Window:AddTab("Settings", "⚙️")
+    SettingsTab:AddLabel("Display")
+    SettingsTab:AddChoice("Theme", function(v) Framework.Config.Theme = v end, TemaList)
+end
+
+local function InitLoginUI()
+    local sg = Instance.new("ScreenGui", Services.CoreGui)
+    sg.Name = "LuvHubLoginUI"
+    sg.DisplayOrder = 9999
+    sg.IgnoreGuiInset = true 
+
+    local bg = Instance.new("Frame", sg)
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.5
+    bg.Active = true 
+
+    local main = Instance.new("Frame", bg)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.Size = UDim2.new(0, 320, 0, 180)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.BackgroundColor3 = Color3.fromRGB(15, 15, 17)
+    local corner = Instance.new("UICorner", main)
+    corner.CornerRadius = UDim.new(0, 10)
+    
+    local stroke = Instance.new("UIStroke", main)
+    stroke.Color = Color3.fromRGB(45, 110, 255)
+    stroke.Thickness = 1.5
+
+    local title = Instance.new("TextLabel", main)
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "LUVHUB X - LOGIN"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+
+    local userLabel = Instance.new("TextLabel", main)
+    userLabel.Size = UDim2.new(1, 0, 0, 30)
+    userLabel.Position = UDim2.new(0, 0, 0, 50)
+    userLabel.BackgroundTransparency = 1
+    userLabel.Text = "Detected User: " .. Framework.Cache.LocalPlayer.Name
+    userLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    userLabel.Font = Enum.Font.GothamMedium
+    userLabel.TextSize = 12
+
+    local btn = Instance.new("TextButton", main)
+    btn.Size = UDim2.new(0, 200, 0, 40)
+    btn.Position = UDim2.new(0.5, -100, 1, -55)
+    btn.BackgroundColor3 = Color3.fromRGB(45, 110, 255)
+    btn.Text = "VERIFY ACCESS"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    local btnCorner = Instance.new("UICorner", btn)
+    btnCorner.CornerRadius = UDim.new(0, 6)
+
+    btn.MouseButton1Click:Connect(function()
+        btn.Text = "Checking Database..."
+        btn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        task.wait(1.2)
+
+        if WhitelistUsers[Framework.Cache.LocalPlayer.Name] then
+            btn.BackgroundColor3 = Color3.fromRGB(40, 220, 40)
+            btn.Text = "ACCESS GRANTED"
+            task.wait(0.5)
+            sg:Destroy()
+            LoadMainScript()
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+            btn.Text = "ACCESS DENIED"
+            userLabel.Text = "You are not whitelisted!"
+            userLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            task.wait(2)
+            btn.BackgroundColor3 = Color3.fromRGB(45, 110, 255)
+            btn.Text = "VERIFY ACCESS"
+        end
+    end)
+end
+
+InitLoginUI()
